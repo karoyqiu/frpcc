@@ -12,9 +12,12 @@
   "app": {
     "windows": [
       {
-        "title": "frpcc",
+        "title": "frpc",
         "width": 1200,
-        "height": 700
+        "height": 700,
+        "create": false,
+        "center": true,
+        "visible": false
       }
     ],
     "security": {

@@ -1,7 +1,14 @@
 use std::{collections::VecDeque, fs, path::PathBuf, sync::Mutex};
 
-use tauri::{AppHandle, Manager, State, command};
-use tauri_plugin_shell::{ShellExt, process::{CommandChild, CommandEvent}};
+use tauri::{
+  AppHandle, Manager, Result, State, WebviewWindowBuilder, command,
+  menu::{Menu, MenuItem, PredefinedMenuItem},
+  tray::{MouseButton, TrayIconBuilder, TrayIconEvent},
+};
+use tauri_plugin_shell::{
+  ShellExt,
+  process::{CommandChild, CommandEvent},
+};
 
 const MAX_LOG_LINES: usize = 8192;
 
@@ -57,7 +64,7 @@ impl FrpcState {
       .collect::<Vec<String>>()
   }
 
-  fn stop(&mut self) -> Result<(), tauri_plugin_shell::Error> {
+  fn stop(&mut self) -> std::result::Result<(), tauri_plugin_shell::Error> {
     let frpc = self.app.shell().sidecar("frpc")?;
     let cmd = frpc.args(["stop", "-c", &self.config.to_string_lossy()]);
     tauri::async_runtime::block_on(async move {
@@ -80,6 +87,19 @@ fn get_frpc_logs(state: State<'_, Mutex<FrpcState>>, count: Option<usize>) -> Ve
   let state = state.lock().unwrap();
   let c = count.unwrap_or(20);
   state.get_recent(c)
+}
+
+/// 显示主窗口。如果没有主窗口，则根据配置创建一个。
+fn show_main_window(app: &AppHandle) -> Result<()> {
+  if let Some(window) = app.get_webview_window("main") {
+    window.show()?;
+    window.set_focus()?;
+    window.request_user_attention(Some(tauri::UserAttentionType::Informational))?;
+  } else {
+    WebviewWindowBuilder::from_config(app, &app.config().app.windows.get(0).unwrap())?.build()?;
+  }
+
+  Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -140,8 +160,54 @@ pub fn run() {
         }
       });
 
+      // 通知区域图标
+      let settings = MenuItem::with_id(app, "settings", "&Settings", true, None::<&str>)?;
+      let quit = MenuItem::with_id(app, "quit", "E&xit", true, None::<&str>)?;
+      let sep = PredefinedMenuItem::separator(app)?;
+      let menu = Menu::with_items(app, &[&settings, &sep, &quit])?;
+
+      let _tray = TrayIconBuilder::new()
+        .title("frpc")
+        .tooltip("frpc")
+        .icon(app.default_window_icon().unwrap().clone())
+        .menu(&menu)
+        .on_menu_event(|app_handle, event| match event.id.as_ref() {
+          "settings" => {
+            show_main_window(app_handle).expect("Failed to show main window");
+          }
+          "quit" => {
+            let state = app_handle.state::<Mutex<FrpcState>>();
+            let mut state = state.lock().unwrap();
+            let _ = state.stop();
+            app_handle.exit(0);
+          }
+          _ => {
+            println!("menu item {:?} not handled", event.id);
+          }
+        })
+        .on_tray_icon_event(|tray, event| match event {
+          TrayIconEvent::DoubleClick {
+            button: MouseButton::Left,
+            ..
+          } => {
+            let app = tray.app_handle();
+            show_main_window(app).expect("Failed to show main window");
+          }
+          _ => {}
+        })
+        .show_menu_on_left_click(false)
+        .build(app)?;
+
       Ok(())
     })
-    .run(tauri::generate_context!())
-    .expect("error while running tauri application");
+    .build(tauri::generate_context!())
+    .expect("error while running tauri application")
+    .run(|_, event| match event {
+      tauri::RunEvent::ExitRequested { code, api, .. } => {
+        if code.is_none() {
+          api.prevent_exit();
+        }
+      }
+      _ => {}
+    });
 }
