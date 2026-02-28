@@ -1,5 +1,4 @@
 import { createRootRoute, Outlet } from '@tanstack/react-router';
-import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useEffect } from 'react';
 
@@ -19,7 +18,6 @@ const RootLayout = () => {
         <main className="w-full">
           <Outlet />
         </main>
-        <TanStackRouterDevtools />
       </SidebarProvider>
     </TooltipProvider>
   );
