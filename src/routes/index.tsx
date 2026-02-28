@@ -1,33 +1,35 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { invoke } from '@tauri-apps/api/core';
-import { SaveIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { List } from 'react-window';
+import { useInterval } from 'usehooks-ts';
 
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
+import { LogRow } from '@/components/log-row';
 
 export const Route = createFileRoute('/')({
-  component: Index,
+  component: RouteComponent,
 });
 
-function Index() {
-  const [config, setConfig] = useState('');
+function RouteComponent() {
+  const [logs, setLogs] = useState<string[]>([]);
 
-  useEffect(() => {
-    invoke<string>('get_frpc_config').then(setConfig);
-  }, []);
+  const loadLogs = () => {
+    invoke<string[]>('get_frpc_logs').then(setLogs);
+  };
+
+  useEffect(loadLogs, []);
+
+  useInterval(loadLogs, 1000);
 
   return (
-    <div className="flex h-full flex-col gap-2 p-2">
-      <Textarea
-        className="grow font-mono"
-        value={config}
-        onChange={(e) => setConfig(e.target.value)}
+    <div className="h-full p-2">
+      <List
+        className="h-full"
+        rowComponent={LogRow}
+        rowCount={logs.length}
+        rowHeight={24}
+        rowProps={{ logs }}
       />
-      <Button onClick={() => invoke('set_frpc_config', { config })}>
-        <SaveIcon />
-        Save
-      </Button>
     </div>
   );
 }

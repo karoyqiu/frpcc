@@ -18,13 +18,13 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={location?.pathname === '/'}>
-                <Link to="/">Settings</Link>
+              <SidebarMenuButton asChild isActive={location?.pathname === '/config'}>
+                <Link to="/config">Configuration</Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
             <SidebarMenuItem>
-              <SidebarMenuButton asChild isActive={location?.pathname === '/log'}>
-                <Link to="/log">Log</Link>
+              <SidebarMenuButton asChild isActive={location?.pathname === '/'}>
+                <Link to="/">Log</Link>
               </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>

@@ -94,7 +94,7 @@ impl Drop for FrpcState {
 #[command]
 fn get_frpc_logs(state: State<'_, Mutex<FrpcState>>, count: Option<usize>) -> Vec<String> {
   let state = state.lock().unwrap();
-  let c = count.unwrap_or(20);
+  let c = count.unwrap_or(MAX_LOG_LINES);
   state.get_recent(c)
 }
 
@@ -103,7 +103,8 @@ fn get_frpc_config(app_handle: AppHandle) -> String {
   // Resolve config path in AppConfig
   let filename = app_handle
     .path()
-    .resolve("config.toml", tauri::path::BaseDirectory::AppConfig).expect("Failed to resolve config filename");
+    .resolve("config.toml", tauri::path::BaseDirectory::AppConfig)
+    .expect("Failed to resolve config filename");
   let bytes = fs::read(filename).expect("Failed to read config");
   String::from_utf8_lossy(&bytes).to_string()
 }
@@ -113,7 +114,8 @@ fn set_frpc_config(app_handle: AppHandle, config: String) {
   // Resolve config path in AppConfig
   let filename = app_handle
     .path()
-    .resolve("config.toml", tauri::path::BaseDirectory::AppConfig).expect("Failed to resolve config filename");
+    .resolve("config.toml", tauri::path::BaseDirectory::AppConfig)
+    .expect("Failed to resolve config filename");
   fs::write(filename, config).expect("Failed to write config");
 
   let state = app_handle.state::<Mutex<FrpcState>>();
@@ -138,7 +140,11 @@ fn show_main_window(app: &AppHandle) -> Result<()> {
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
-    .invoke_handler(tauri::generate_handler![get_frpc_logs, get_frpc_config, set_frpc_config])
+    .invoke_handler(tauri::generate_handler![
+      get_frpc_logs,
+      get_frpc_config,
+      set_frpc_config
+    ])
     .setup(|app| {
       // Resolve config path in AppConfig
       let filename = app
@@ -193,10 +199,10 @@ pub fn run() {
       });
 
       // 通知区域图标
-      let settings = MenuItem::with_id(app, "settings", "&Settings", true, None::<&str>)?;
+      let show = MenuItem::with_id(app, "show", "&Show", true, None::<&str>)?;
       let quit = MenuItem::with_id(app, "quit", "E&xit", true, None::<&str>)?;
       let sep = PredefinedMenuItem::separator(app)?;
-      let menu = Menu::with_items(app, &[&settings, &sep, &quit])?;
+      let menu = Menu::with_items(app, &[&show, &sep, &quit])?;
 
       let _tray = TrayIconBuilder::new()
         .title("frpc")
@@ -204,12 +210,12 @@ pub fn run() {
         .icon(app.default_window_icon().unwrap().clone())
         .menu(&menu)
         .on_menu_event(|app_handle, event| match event.id.as_ref() {
-          "settings" => {
+          "show" => {
             show_main_window(app_handle).expect("Failed to show main window");
           }
           "quit" => {
             let state = app_handle.state::<Mutex<FrpcState>>();
-            let mut state = state.lock().unwrap();
+            let state = state.lock().unwrap();
             let _ = state.stop();
             app_handle.exit(0);
           }
