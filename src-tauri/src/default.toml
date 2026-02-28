@@ -1,0 +1,7 @@
+natHoleStunServer = "stun.miwifi.com:3478"
+log.disablePrintColor = true
+
+[webServer]
+port = 9966
+user = "admin"
+password = "admin"
