@@ -64,7 +64,16 @@ impl FrpcState {
       .collect::<Vec<String>>()
   }
 
-  fn stop(&mut self) -> std::result::Result<(), tauri_plugin_shell::Error> {
+  fn reload(&self) -> std::result::Result<(), tauri_plugin_shell::Error> {
+    let frpc = self.app.shell().sidecar("frpc")?;
+    let cmd = frpc.args(["reload", "-c", &self.config.to_string_lossy()]);
+    tauri::async_runtime::block_on(async move {
+      let _ = cmd.status().await;
+    });
+    Ok(())
+  }
+
+  fn stop(&self) -> std::result::Result<(), tauri_plugin_shell::Error> {
     let frpc = self.app.shell().sidecar("frpc")?;
     let cmd = frpc.args(["stop", "-c", &self.config.to_string_lossy()]);
     tauri::async_runtime::block_on(async move {
@@ -89,6 +98,29 @@ fn get_frpc_logs(state: State<'_, Mutex<FrpcState>>, count: Option<usize>) -> Ve
   state.get_recent(c)
 }
 
+#[command]
+fn get_frpc_config(app_handle: AppHandle) -> String {
+  // Resolve config path in AppConfig
+  let filename = app_handle
+    .path()
+    .resolve("config.toml", tauri::path::BaseDirectory::AppConfig).expect("Failed to resolve config filename");
+  let bytes = fs::read(filename).expect("Failed to read config");
+  String::from_utf8_lossy(&bytes).to_string()
+}
+
+#[command]
+fn set_frpc_config(app_handle: AppHandle, config: String) {
+  // Resolve config path in AppConfig
+  let filename = app_handle
+    .path()
+    .resolve("config.toml", tauri::path::BaseDirectory::AppConfig).expect("Failed to resolve config filename");
+  fs::write(filename, config).expect("Failed to write config");
+
+  let state = app_handle.state::<Mutex<FrpcState>>();
+  let state = state.lock().unwrap();
+  state.reload().expect("Failed to reload config");
+}
+
 /// 显示主窗口。如果没有主窗口，则根据配置创建一个。
 fn show_main_window(app: &AppHandle) -> Result<()> {
   if let Some(window) = app.get_webview_window("main") {
@@ -106,10 +138,10 @@ fn show_main_window(app: &AppHandle) -> Result<()> {
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_shell::init())
-    .invoke_handler(tauri::generate_handler![get_frpc_logs])
+    .invoke_handler(tauri::generate_handler![get_frpc_logs, get_frpc_config, set_frpc_config])
     .setup(|app| {
       // Resolve config path in AppConfig
-      let filename: PathBuf = app
+      let filename = app
         .path()
         .resolve("config.toml", tauri::path::BaseDirectory::AppConfig)?;
 
